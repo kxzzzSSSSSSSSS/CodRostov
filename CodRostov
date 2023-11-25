@@ -1,0 +1,161 @@
+import wmi
+import platform
+import psutil
+import subprocess
+import re
+import socket
+import screeninfo
+from screeninfo import get_monitors
+import GPUtil
+from tabulate import tabulate
+import os
+import pdfkit
+from docx import Document
+import xml.etree.ElementTree as ET
+# Ввод данный пользователя ФИО
+Name = input("Введите Ф.И.О. : ")
+
+
+# Получение IP-адреса пользователя
+def get_user_ip():
+    try:
+        # Создание UDP-сокета
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))  # Подключение к удаленному хосту
+
+        # Получение IP-адреса пользователя
+        user_ip = sock.getsockname()[0]
+
+        return user_ip
+    except socket.error:
+        return None
+
+
+# Вывод IP-адреса пользователя
+ip_address = get_user_ip()
+if ip_address:
+    print(Name, "/ IP Address:", ip_address)
+else:
+    print("Failed to retrieve IP address.")
+
+# Информация о системе
+c = wmi.WMI()
+my_system = c.Win32_ComputerSystem()[0]
+print(f" Manufacturer: {my_system.Manufacturer}")
+print(f" Model: {my_system.Model}")
+print(f" Name: {my_system.Name}")
+print(f" NumberOfProcessors: {my_system.NumberOfProcessors}")
+print(f" SystemType: {my_system.SystemType}")
+print(f" SystemFamily: {my_system.SystemFamily}")
+
+# Системная информация
+system_info = platform.uname()
+print(f" System:", system_info.system)
+print(f" Node Name:", system_info.node)
+print(f" Release:", system_info.release)
+print(f" Version:", system_info.version)
+print(f" Machine:", system_info.machine)
+print(f" Processor:", system_info.processor)
+
+# Наименование пользователя
+user = platform.uname().node
+print(f"User:", user)
+
+# Информация о памяти
+memory_info = psutil.virtual_memory()
+print(f"\nMemory Info:")
+print("  Total:", memory_info.total)
+print("  Available:", memory_info.available)
+print("  Used:", memory_info.used)
+print("  Free:", memory_info.free)
+print("  Percentage:", memory_info.percent)
+
+# Информация о жестком диске
+disk_info = psutil.disk_usage('/')
+print(f"\nDisk Info:")
+print("  Total:", disk_info.total)
+print("  Used:", disk_info.used)
+print("  Free:", disk_info.free)
+print("  Percentage:", disk_info.percent)
+
+# Информация о батарее(ноутбук)
+battery_info = psutil.sensors_battery()
+print("\nBattery Info:")
+if battery_info:
+    percent = battery_info.percent
+    print(f"Percentage: {percent}%")
+    plugged = battery_info.power_plugged
+    print(f"Plugged in: {plugged}")
+
+# Информация о запущенных процессах
+process_info = psutil.process_iter()
+print("\nRunning Processes:")
+for process in process_info:
+    print(f"\nProcess ID: {process.pid}")
+    print(f"  Name: {process.name()}")
+
+# Установленные программы
+w = wmi.WMI()
+for p in w.Win32_Product():
+    if p.Version is not None:
+        print(f"Version: {p.Version}")
+    print(f"Vendor: {p.Vendor}")
+    (f"Caption: {p.Caption}")
+    print("\nhline")
+
+
+# Информация о интернете
+def get_tcpip_config():
+    interfaces = psutil.net_if_addrs()
+    for interface, addresses in interfaces.items():
+        print(f"Interface: {interface}")
+        for address in addresses:
+            if address.family == socket.AF_INET:
+                print(f"    IPv4 Address: {address.address}")
+                print(f"    Netmask: {address.netmask}")
+                print(f"    Broadcast IP: {address.broadcast}")
+            elif address.family == socket.AF_INET6:
+                print(f"    IPv6 Address: {address.address}")
+                print(f"    Netmask: {address.netmask}")
+
+
+get_tcpip_config()
+
+# Информация о мониторе
+for m in get_monitors():
+    print(str(m))
+
+# Выполнение команды для получения информации о BIOS (работает на Windows)
+output = subprocess.check_output('wmic bios get serialnumber', shell=True)
+print(f"Серийный номер BIOS: {output.decode('  utf-8').strip()}")
+
+# Серийный номер процессора
+processor_serial = None
+if platform.system() == 'Windows':
+    processor_serial = platform.win32_edition()
+    print(f"Серийный номер процессора:", processor_serial)
+
+
+def gpu_info():
+    gpus = GPUtil.getGPUs()
+    gpus_list = []
+
+    for gpu in gpus:
+        gpu_id = gpu.id
+        gpu_name = gpu.name
+        gpu_load = f'{gpu.load * 100}%'
+        gpu_free_memory = f'{gpu.memoryFree}MB'
+        gpu_used_memory = f'{gpu.memoryUsed}MB'
+        gpu_total_memory = f'{gpu.memoryTotal}MB'
+        gpu_temp = f'{gpu.temperature}'
+
+        gpus_list.append((gpu_id, gpu_name, gpu_load, gpu_free_memory, gpu_used_memory, gpu_total_memory, gpu_temp))
+
+    return str(
+        tabulate(gpus_list, headers=('id', 'name', 'load', 'free memory', 'used memory', 'total memory', 'temperature'),
+                 tablefmt='pretty'))
+
+
+if __name__ == '__main__':
+    print(gpu_info())
+
